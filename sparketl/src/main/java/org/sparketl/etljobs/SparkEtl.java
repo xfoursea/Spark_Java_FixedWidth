@@ -27,7 +27,7 @@ public final class SparkEtl {
 		
 		@SuppressWarnings("resource")
 		JavaSparkContext spark = new JavaSparkContext(args[0],
-				"Java Wordcount", System.getenv("SPARK_HOME"),
+				"SparkEtl", System.getenv("SPARK_HOME"),
 				JavaSparkContext.jarOfClass(SparkEtl.class));
 		JavaRDD<String> file = spark.textFile(args[1]);
 
