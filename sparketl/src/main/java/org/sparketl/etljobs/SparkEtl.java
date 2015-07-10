@@ -6,6 +6,8 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.api.java.function.Function;
+import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.api.java.function.PairFunction;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -18,9 +20,9 @@ import scala.Tuple2;
  */
 public final class SparkEtl {
 	public static void main(String[] args) throws Exception {
-		if (args.length < 3) {
+		if (args.length < 4) {
 			System.err
-					.println("Please use: SparkEtl <master> <input file> <output file>");
+					.println("Please use: SparkEtl <master> <input file> <output file> <country>");
 			System.exit(1);
 		}
 		//System.out.println("The class path is    "+System.getProperty("java.class.path"));
@@ -30,7 +32,7 @@ public final class SparkEtl {
 				"SparkEtl", System.getenv("SPARK_HOME"),
 				JavaSparkContext.jarOfClass(SparkEtl.class));
 		JavaRDD<String> file = spark.textFile(args[1]);
-
+		final String filterByCt=(String)args[3];
 		FlatMapFunction<String, String> jsonLine = jsonFile -> {
 			return Arrays.asList(jsonFile.toLowerCase().split("\\r?\\n"));
 		};
@@ -56,8 +58,15 @@ public final class SparkEtl {
 		};
 
 		JavaPairRDD<String, String> pairs = eachLine.mapToPair(mapCountry);
+		
+		Function<Tuple2<String, String>, Boolean> func=(map)->{
+			 return (map._2.equals(filterByCt));
+		
+		};
+		
 
-		pairs.sortByKey(true).saveAsTextFile(args[2]);
+		JavaPairRDD<String,String> reduced=pairs.filter(func);
+		reduced.saveAsTextFile(args[2]);
 		System.exit(0);
 
 	}
