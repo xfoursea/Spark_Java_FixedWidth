@@ -25,32 +25,37 @@ public final class SparkEtl {
 					.println("Please use: SparkEtl <master> <input file> <output file> <country>");
 			System.exit(1);
 		}
-		//System.out.println("The class path is    "+System.getProperty("java.class.path"));
-		
+		// System.out.println("The class path is    "+System.getProperty("java.class.path"));
+
 		@SuppressWarnings("resource")
-		JavaSparkContext spark = new JavaSparkContext(args[0],
-				"SparkEtl", System.getenv("SPARK_HOME"),
+		JavaSparkContext spark = new JavaSparkContext(args[0], "SparkEtl",
+				System.getenv("SPARK_HOME"),
 				JavaSparkContext.jarOfClass(SparkEtl.class));
 		JavaRDD<String> file = spark.textFile(args[1]);
-		final String filterByCt=(String)args[3];
+
+		// Should be a final variable for variable scope in Java8
+		final String filterByCt = (String) args[3];
+
+		// As per JSON file each line item is a different json
 		FlatMapFunction<String, String> jsonLine = jsonFile -> {
 			return Arrays.asList(jsonFile.toLowerCase().split("\\r?\\n"));
 		};
 
 		JavaRDD<String> eachLine = file.flatMap(jsonLine);
 
+		// This can be customized per JSON Schema
 		PairFunction<String, String, String> mapCountry = eachItem -> {
 			JSONParser parser = new JSONParser();
 			String country = "";
-			String lines="";
+			String lines = "";
 			try {
 				Object obj = parser.parse(eachItem);
 				JSONObject jsonObj = (JSONObject) obj;
 				country = (String) jsonObj.get("country");
 				String name = (String) jsonObj.get("name");
-				
-				lines=name+"\t"+country;
-				
+
+				lines = name + "\t" + country;
+
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
@@ -58,14 +63,14 @@ public final class SparkEtl {
 		};
 
 		JavaPairRDD<String, String> pairs = eachLine.mapToPair(mapCountry);
-		
-		Function<Tuple2<String, String>, Boolean> func=(map)->{
-			 return (map._2.equals(filterByCt));
-		
-		};
-		
 
-		JavaPairRDD<String,String> reduced=pairs.filter(func);
+		// Filter function filters the results with the given country
+		Function<Tuple2<String, String>, Boolean> func = (map) -> {
+			return (map._2.equals(filterByCt));
+		};
+
+		// Reduce the result set as per the filter criteria and save it
+		JavaPairRDD<String, String> reduced = pairs.filter(func);
 		reduced.saveAsTextFile(args[2]);
 		System.exit(0);
 
