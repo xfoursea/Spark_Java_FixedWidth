@@ -38,7 +38,7 @@ public final class SparkEtl {
 
 		// As per JSON file each line item is a different json
 		FlatMapFunction<String, String> jsonLine = jsonFile -> {
-			return Arrays.asList(jsonFile.toLowerCase().split("\\r?\\n"));
+			return Arrays.asList(jsonFile.split("\\r?\\n"));
 		};
 
 		JavaRDD<String> eachLine = file.flatMap(jsonLine);
