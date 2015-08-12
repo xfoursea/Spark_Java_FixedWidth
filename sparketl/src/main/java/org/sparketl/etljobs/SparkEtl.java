@@ -2,8 +2,6 @@ package org.sparketl.etljobs;
 
 import java.util.Arrays;
 
-import org.apache.hadoop.mapred.lib.HashPartitioner;
-import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
