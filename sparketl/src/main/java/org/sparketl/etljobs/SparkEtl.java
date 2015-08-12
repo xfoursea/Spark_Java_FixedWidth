@@ -2,6 +2,8 @@ package org.sparketl.etljobs;
 
 import java.util.Arrays;
 
+import org.apache.hadoop.mapred.lib.HashPartitioner;
+import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -63,6 +65,9 @@ public final class SparkEtl {
 		};
 
 		JavaPairRDD<String, String> pairs = eachLine.mapToPair(mapCountry);
+		
+		//Hash Partitioning RDD for demonstration purpose, this allows all the same keys going to same machines
+		JavaPairRDD<String,String> pairsPartitioned=pairs.partitionBy(new org.apache.spark.HashPartitioner(2)).persist(StorageLevel.MEMORY_AND_DISK());
 
 		// Filter function filters the results with the given country
 		Function<Tuple2<String, String>, Boolean> func = (map) -> {
@@ -70,7 +75,7 @@ public final class SparkEtl {
 		};
 
 		// Reduce the result set as per the filter criteria and save it
-		JavaPairRDD<String, String> reduced = pairs.filter(func);
+		JavaPairRDD<String, String> reduced = pairsPartitioned.filter(func);
 		// Caching intermediate RDD for reuse
 		reduced.persist(StorageLevel.MEMORY_AND_DISK());
 		// Action to save the file to disk
