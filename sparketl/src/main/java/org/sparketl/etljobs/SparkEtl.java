@@ -59,14 +59,14 @@ public final class SparkEtl {
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
-			return new Tuple2<String, String>(lines, country);
+			return new Tuple2<String, String>(country,lines);
 		};
 
 		JavaPairRDD<String, String> pairs = eachLine.mapToPair(mapCountry);
 
 		// Filter function filters the results with the given country
 		Function<Tuple2<String, String>, Boolean> func = (map) -> {
-			return (map._2.equals(filterByCt));
+			return (map._1.equals(filterByCt));
 		};
 
 		// Reduce the result set as per the filter criteria and save it
@@ -76,7 +76,7 @@ public final class SparkEtl {
 		// Action to save the file to disk
 		reduced.saveAsTextFile(args[2]);
 		// Retrieve values leaving the keys behind
-		JavaRDD<String> maps = reduced.keys();
+		JavaRDD<String> maps = reduced.values();
 		// Save the values to the disk
 		maps.saveAsTextFile(args[3]);
 		System.exit(0);
