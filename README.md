@@ -42,8 +42,7 @@ Original file:
 
 Output:
 
- 1. Masked file:
-
+Masked file:
 
     [root@sandbox ~]# hadoop fs -cat /user/spark/test/part-00000
     12301     Johnny              Begood              Progxxxxxxxxxxxxxxx 12306
@@ -60,15 +59,13 @@ Output:
     12311     Johnny              Test                Invaxxxxxxxxxxxxxxx 12311
     12312     Johnny                                  Invaxxxxxxxxxxxxxxx 12313
 
- 2. Invalid file:
-
+  Invalid file:
 
     [root@sandbox ~]# hadoop fs -cat /user/spark/invalid/part-00001
     12311     Johnny              Test                Invaxxxxxxxxxxxxxxx 12311
     12312     Johnny                                  Invaxxxxxxxxxxxxxxx 12313
 
- 3. Valid file:
-
+ Valid file:
 
     root@sandbox ~]# hadoop fs -cat /user/spark/valid/part-00000
     12309     Evenmore            Dumbnames           Senixxxxxxxxxxxxxxx 12307
@@ -83,8 +80,7 @@ Output:
     12304     Joseph              Blow                Testxxxxxxxxxxxxxxx 12308
     12303     Neva                Mind                Archxxxxxxxxxxxxxxx 12306
 
-4. Hive table:
-
+ Hive table:
 
     hive> select * from masked_t1;
     OK
