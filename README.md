@@ -1,10 +1,15 @@
 # SparkJavaETL
 
 This is a POC project to demo how to use Spark to
+
  .Read and Parse FixedWidthFile
+
  .Execute masking and validation per line
+
  .Valid and invalid lines are saved to seperate HDFS places
+
  .Query the loaded file
+
  .Save masked RDD to a Hive table
 
 
