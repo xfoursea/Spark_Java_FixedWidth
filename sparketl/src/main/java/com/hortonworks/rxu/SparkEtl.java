@@ -1,88 +1,129 @@
-package org.sparketl.etljobs;
+package com.hortonworks.rxu;
 
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
 
-import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.api.java.function.Function;
-import org.apache.spark.api.java.function.PairFunction;
-import org.apache.spark.storage.StorageLevel;
-import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
+import org.apache.spark.sql.DataFrame;
 
-import scala.Tuple2;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.RowFactory;
+//import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
+import org.apache.spark.sql.hive.HiveContext;
+//import org.apache.spark.sql.hive.api.java.HiveContext;
+
 
 /**
- * @author vijith.reddy
+ * @author Richard Xu
  *
  */
 public final class SparkEtl {
+	//dummy mask 
+	 static class Mask implements Function<String, String> {
+
+		    @Override
+		    public String call(String line) {
+		    	StringBuilder newLine = new StringBuilder(line);
+		    	newLine.replace(54, 69, "xxxxxxxxxxxxxxx");
+		      return newLine.toString();
+		    }
+		  }
+	
 	public static void main(String[] args) throws Exception {
-		if (args.length < 5) {
+		if (args.length != 4) {
 			System.err
-					.println("Please use: SparkEtl <master> <input file> <output file for key value> <output file for values only> <country>");
+					.println("Please use: SparkEtl <input file> <output file> <file for validEntries> <file for invalid>");
 			System.exit(1);
 		}
-		// System.out.println("The class path is    "+System.getProperty("java.class.path"));
 
-		@SuppressWarnings("resource")
-		JavaSparkContext spark = new JavaSparkContext(args[0], "SparkEtl",
-				System.getenv("SPARK_HOME"),
-				JavaSparkContext.jarOfClass(SparkEtl.class));
-		JavaRDD<String> file = spark.textFile(args[1]);
-
-		// Should be a final variable for variable scope in Java8
-		final String filterByCt = (String) args[4];
-
-		// As per JSON file each line item is a different json
-		FlatMapFunction<String, String> jsonLine = jsonFile -> {
-			return Arrays.asList(jsonFile.split("\\r?\\n"));
-		};
-
-		JavaRDD<String> eachLine = file.flatMap(jsonLine);
-
-		// This can be customized per JSON Schema
-		PairFunction<String, String, String> mapCountry = eachItem -> {
-			JSONParser parser = new JSONParser();
-			String country = "";
-			String lines = "";
-			try {
-				Object obj = parser.parse(eachItem);
-				JSONObject jsonObj = (JSONObject) obj;
-				country = (String) jsonObj.get("country");
-				String name = (String) jsonObj.get("name");
-
-				lines = name + "\t" + country;
-
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-			return new Tuple2<String, String>(country,lines);
-		};
-
-		JavaPairRDD<String, String> pairs = eachLine.mapToPair(mapCountry);
+		//@SuppressWarnings("resource")
+		SparkConf sparkConf = new SparkConf().setAppName("JavaSparkEtl");
+	    JavaSparkContext sc = new JavaSparkContext(sparkConf);
 		
-		//Hash Partitioning RDD for demonstration purpose, this allows all the same keys going to same machines
-		JavaPairRDD<String,String> pairsPartitioned=pairs.partitionBy(new org.apache.spark.HashPartitioner(2)).persist(StorageLevel.MEMORY_AND_DISK());
+		//JavaSparkContext sc = new JavaSparkContext(args[0], "SparkEtl",
+		//		System.getenv("SPARK_HOME"),
+		//		JavaSparkContext.jarOfClass(SparkEtl.class));
+		
+		JavaRDD<String> people = sc.textFile(args[0]);
 
-		// Filter function filters the results with the given country
-		Function<Tuple2<String, String>, Boolean> func = (map) -> {
-			return (map._1.equals(filterByCt));
-		};
+		JavaRDD<String> masked = people.map(new Mask());
+		
+		JavaRDD<String> inValidEmps = masked.filter(
+			      new Function<String, Boolean>(){ public Boolean call(String line) {
+			    	  // validation rule 1: one cannot be his own boss:
+			          if (line.substring(0, 9).trim().equals(line.substring(70, 79).trim())) {
+			            return true;
+			          }
+			          // rule 2: empty firstname or lastname  
+			          else if(line.substring(10, 29).trim().length()<1 || line.substring(30, 49).trim().length()<1){
+			        	  return true;
+			          }else {
+			            return false;
+			          }
+			          
+			        }
+			      });
+		
+		JavaRDD<String> validEmps = masked.subtract(inValidEmps);
 
-		// Reduce the result set as per the filter criteria and save it
-		JavaPairRDD<String, String> reduced = pairsPartitioned.filter(func);
-		// Caching intermediate RDD for reuse
-		reduced.persist(StorageLevel.MEMORY_AND_DISK());
-		// Action to save the file to disk
-		reduced.saveAsTextFile(args[2]);
-		// Retrieve values leaving the keys behind
-		JavaRDD<String> maps = reduced.values();
-		// Save the values to the disk
-		maps.saveAsTextFile(args[3]);
-		System.exit(0);
+		masked.saveAsTextFile(args[1]);
+		validEmps.saveAsTextFile(args[2]);
+		inValidEmps.saveAsTextFile(args[3]);
+
+		
+		
+		HiveContext hiveContext = new org.apache.spark.sql.hive.HiveContext(sc.sc());				
+
+		// The schema is encoded in a string
+		String schemaString = "emp_id first_name last_name job_title mgr_emp_id";
+
+		// Generate the schema based on the string of schema
+		List<StructField> fields = new ArrayList<StructField>();
+		for (String fieldName: schemaString.split(" ")) {
+		  fields.add(DataTypes.createStructField(fieldName, DataTypes.StringType, true));
+		}
+		StructType schema = DataTypes.createStructType(fields);
+		
+		// Convert records of the RDD (people) to Rows.
+		JavaRDD<Row> rowRDD = masked.map(
+		  new Function<String, Row>() {
+		    public Row call(String record) throws Exception {
+		      	return RowFactory.create(record.substring(0, 9), record.substring(10, 29), record.substring(30, 49), 
+		    		  record.substring(50, 69), record.substring(70, 78));
+		    }
+		  });
+		
+		// Apply the schema to the RDD.
+		//DataFrame peopleDataFrame = sqlContext.createDataFrame(rowRDD, schema);
+		DataFrame peopleDataFrame = hiveContext.createDataFrame(rowRDD, schema);
+		
+		// Register the DataFrame as a table.
+		peopleDataFrame.registerTempTable("people");
+		// SQL can be run over RDDs that have been registered as tables.
+		DataFrame results = hiveContext.sql("SELECT emp_id FROM people");
+		// The results of SQL queries are DataFrames and support all the normal RDD operations.
+		// The columns of a row in the result can be accessed by ordinal.
+		List<String> empids = results.javaRDD().map(new Function<Row, String>() {
+		  public String call(Row row) {
+		    return "emp_id: " + row.getString(0);
+		  }
+		}).collect();
+		
+		System.out.println(empids.toString());
+
+		hiveContext.sql("CREATE TABLE IF NOT EXISTS masked_t1 (emp_id string, first_name string, last_name string, job_title string, mgr_emp_id string)");
+
+		peopleDataFrame.insertInto("masked_t1");
+		
+		//peopleDataFrame.saveAsTable("default.people_t1");
+		
+		sc.stop();
 
 	}
 
